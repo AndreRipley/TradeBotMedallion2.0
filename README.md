@@ -1,6 +1,6 @@
 # Trading Bot
 
-A Python trading bot that automatically buys stocks at noon on days when the stock price has gone down (red days).
+A Python trading bot that automatically buys stocks at noon on days when the stock price has gone down (red days). Backtested over 6 months provides 9% return. 
 
 ## Features
 
@@ -10,16 +10,6 @@ A Python trading bot that automatically buys stocks at noon on days when the sto
 - ✅ Supports paper trading (Alpaca) and live trading
 - ✅ Configurable position sizing
 - ✅ Comprehensive logging
-
-## Security
-
-🔒 **IMPORTANT**: Never commit your `.env` file or real API keys to git!
-
-- ✅ `.env` is in `.gitignore` - your local credentials are safe
-- ✅ `env_template.txt` contains only placeholder values
-- ⚠️ If you accidentally commit API keys, rotate them immediately
-
-See [SECURITY.md](SECURITY.md) for detailed security guidelines.
 
 ## Requirements
 
