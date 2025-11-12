@@ -17,11 +17,12 @@ ALPACA_BASE_URL=https://paper-api.alpaca.markets
 
 ### 2. Stock Configuration (REQUIRED)
 ```
-STOCKS=AAPL,MSFT,GOOGL,AMZN,TSLA
+STOCKS=AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA,V,UNH,XOM,JNJ,JPM,WMT,MA,PG,LLY,AVGO,HD,CVX,MRK,ABBV,COST,ADBE,PEP,TMO,MCD,CSCO,NFLX,ABT,ACN
 ```
 
 **Format:** Comma-separated list of stock symbols (no spaces)
-**Example:** `STOCKS=AAPL,MSFT,GOOGL,AMZN,TSLA,NVDA,META`
+**Recommended:** 30 stocks for better diversification (see STOCK_LISTS.md for alternatives)
+**Example (30 stocks):** `STOCKS=AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA,V,UNH,XOM,JNJ,JPM,WMT,MA,PG,LLY,AVGO,HD,CVX,MRK,ABBV,COST,ADBE,PEP,TMO,MCD,CSCO,NFLX,ABT,ACN`
 
 ### 3. Trading Settings (OPTIONAL - defaults shown)
 ```
@@ -69,14 +70,16 @@ At minimum, you MUST set:
 ## Example Complete Configuration
 
 ```
-ALPACA_API_KEY=PKGE4LEF5L4QM5V3B5KWYXTN5Z
-ALPACA_SECRET_KEY=7VwmRiKKFnzrxKfnfdgt98536To5FnJBoQUkTFpkbJym
+ALPACA_API_KEY=your_alpaca_api_key_here
+ALPACA_SECRET_KEY=your_alpaca_secret_key_here
 ALPACA_BASE_URL=https://paper-api.alpaca.markets
-STOCKS=AAPL,MSFT,GOOGL,AMZN,TSLA,NVDA,META
+STOCKS=AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA,V,UNH,XOM,JNJ,JPM,WMT,MA,PG,LLY,AVGO,HD,CVX,MRK,ABBV,COST,ADBE,PEP,TMO,MCD,CSCO,NFLX,ABT,ACN
 POSITION_SIZE=1000.0
 TIMEZONE=America/New_York
 LOG_LEVEL=INFO
 ```
+
+**Note:** The 30-stock list above provides better diversification. See `STOCK_LISTS.md` for 20-stock and 50-stock alternatives.
 
 ---
 

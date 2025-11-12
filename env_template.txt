@@ -2,14 +2,16 @@
 # Copy this file to .env and fill in your values
 
 # Stock symbols to monitor (comma-separated)
-STOCKS=AAPL,MSFT,GOOGL,AMZN,TSLA
+# OPTIMIZED: 30 stocks for better diversification and more trading opportunities
+# Includes: Tech, Finance, Healthcare, Consumer, Energy, Industrial sectors
+STOCKS=AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA,V,UNH,XOM,JNJ,JPM,WMT,MA,PG,LLY,AVGO,HD,CVX,MRK,ABBV,COST,ADBE,PEP,TMO,MCD,CSCO,NFLX,ABT,ACN
 
 # Alpaca Trading API (for executing trades)
 # Get your API keys from: https://alpaca.markets/
 # IMPORTANT: Never commit real API keys to git!
-ALPACA_API_KEY=PKGE4LEF5L4QM5V3B5KWYXTN5Z
-ALPACA_SECRET_KEY=7VwmRiKKFnzrxKfnfdgt98536To5FnJBoQUkTFpkbJym
-ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2
+ALPACA_API_KEY=your_alpaca_api_key_here
+ALPACA_SECRET_KEY=your_alpaca_secret_key_here
+ALPACA_BASE_URL=https://paper-api.alpaca.markets
 
 # Alpha Vantage API (for stock data - optional, free tier available)
 # Get your API key from: https://www.alphavantage.co/support/#api-key
@@ -20,4 +22,3 @@ POSITION_SIZE=1000.0
 TIMEZONE=America/New_York
 LOG_LEVEL=INFO
 LOG_FILE=trading_bot.log
-

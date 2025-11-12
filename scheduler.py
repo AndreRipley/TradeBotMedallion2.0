@@ -50,12 +50,9 @@ class TradingScheduler:
         logger.info(f"Starting trading bot scheduler")
         logger.info(f"Monitoring stocks: {', '.join(self.stocks)}")
         logger.info(f"Checking frequency: Every minute during market hours (9:30 AM - 4:00 PM ET)")
-        logger.info(f"Position monitoring: Every 5 minutes")
+        logger.info(f"Position monitoring: Every minute (integrated with signal checks)")
         
-        # Schedule position monitoring (check stop-losses every 5 minutes)
-        schedule.every(5).minutes.do(self._monitor_positions)
-        
-        logger.info("Scheduler started. Checking for anomalies every minute during market hours...")
+        logger.info("Scheduler started. Checking for anomalies and monitoring positions every minute during market hours...")
         
         # Run scheduler - check every minute
         try:
@@ -63,10 +60,10 @@ class TradingScheduler:
                 # Check if it's market hours
                 if self._is_market_hours():
                     # Execute trading logic every minute during market hours
+                    # This now also checks positions (better risk management)
                     self._execute_trading_logic()
-                
-                # Run any scheduled tasks (like position monitoring)
-                schedule.run_pending()
+                    # Also check positions separately for positions not in watchlist
+                    self._monitor_positions()
                 
                 # Sleep for 1 minute before next check
                 time.sleep(60)

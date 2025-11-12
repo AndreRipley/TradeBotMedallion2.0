@@ -12,9 +12,16 @@ class Config:
     """Configuration settings for the trading bot."""
     
     # Stock symbols to monitor (comma-separated in .env or list here)
+    # Default: 30 diversified stocks for better opportunities and risk management
+    # Tech: AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA, ADBE, CSCO, NFLX, ACN
+    # Finance: V, JPM, MA
+    # Healthcare: UNH, JNJ, LLY, MRK, ABBV, ABT, TMO
+    # Consumer: WMT, PG, COST, MCD
+    # Energy: XOM, CVX
+    # Industrial: HD, AVGO
     STOCKS: List[str] = os.getenv(
         'STOCKS', 
-        'AAPL,MSFT,GOOGL,AMZN,TSLA'
+        'AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA,V,UNH,XOM,JNJ,JPM,WMT,MA,PG,LLY,AVGO,HD,CVX,MRK,ABBV,COST,ADBE,PEP,TMO,MCD,CSCO,NFLX,ABT,ACN'
     ).split(',')
     
     # Trading API Configuration

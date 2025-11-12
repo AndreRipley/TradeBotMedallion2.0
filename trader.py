@@ -65,9 +65,46 @@ class Trader:
             logger.error(f"Error executing buy order for {symbol}: {e}")
             return False
     
+    def get_account_balance(self) -> Optional[Dict]:
+        """Get account balance and buying power."""
+        try:
+            if not self.client:
+                return None
+            
+            account = self.client.get_account()
+            return {
+                'cash': float(account.cash),
+                'buying_power': float(account.buying_power),
+                'portfolio_value': float(account.portfolio_value),
+                'equity': float(account.equity)
+            }
+        except Exception as e:
+            logger.error(f"Error getting account balance: {e}")
+            return None
+    
     def _execute_alpaca_order(self, symbol: str, dollar_amount: float) -> bool:
         """Execute order using Alpaca API."""
         try:
+            # Check account balance first
+            account_info = self.get_account_balance()
+            if account_info:
+                buying_power = account_info['buying_power']
+                cash = account_info['cash']
+                logger.info(f"💰 Account Balance: ${cash:.2f} cash, ${buying_power:.2f} buying power")
+                
+                if buying_power < dollar_amount:
+                    logger.warning(
+                        f"⚠️  INSUFFICIENT BUYING POWER: Need ${dollar_amount:.2f}, "
+                        f"have ${buying_power:.2f} available"
+                    )
+                    logger.warning(
+                        f"   💡 Solutions: "
+                        f"1. Add funds to Alpaca paper account (https://app.alpaca.markets/paper/dashboard/account)"
+                        f"2. Reduce POSITION_SIZE in config"
+                        f"3. Wait for existing positions to be sold"
+                    )
+                    return False
+            
             # Get current price to calculate quantity
             from alpaca.data.historical import StockHistoricalDataClient
             from alpaca.data.requests import StockLatestQuoteRequest
@@ -110,10 +147,33 @@ class Trader:
             )
             logger.info(f"Order ID: {order.id}")
             
+            # Update account balance after trade
+            if account_info:
+                new_balance = self.get_account_balance()
+                if new_balance:
+                    logger.info(
+                        f"💰 Updated Balance: ${new_balance['buying_power']:.2f} buying power remaining"
+                    )
+            
             return True
             
         except Exception as e:
+            error_msg = str(e)
             logger.error(f"Error executing Alpaca order for {symbol}: {e}")
+            
+            # Provide helpful error messages
+            if "insufficient buying power" in error_msg.lower() or "40310000" in error_msg:
+                logger.error("=" * 60)
+                logger.error("❌ INSUFFICIENT BUYING POWER")
+                logger.error("=" * 60)
+                logger.error("Your Alpaca paper account doesn't have enough cash.")
+                logger.error("")
+                logger.error("Solutions:")
+                logger.error("1. Add funds: https://app.alpaca.markets/paper/dashboard/account")
+                logger.error("2. Reduce POSITION_SIZE in environment variables")
+                logger.error("3. Wait for existing positions to be sold")
+                logger.error("=" * 60)
+            
             return False
     
     def sell_stock(self, symbol: str, shares: Optional[float] = None) -> bool:
