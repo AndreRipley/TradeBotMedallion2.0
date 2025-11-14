@@ -1,0 +1,2 @@
+period,days,start_date,end_date,return_pct,win_rate_pct,total_trades,buy_trades,sell_trades,total_invested,total_value,total_profit_loss,profitable_stocks,total_stocks,stop_loss_triggers,trailing_stop_triggers,overbought_sells,annualized_return_pct
+3 Months,90,2025-08-15,2025-11-13,53.58,93.33333333333333,264,147,117,137000.0,210404.46,73404.46,28,30,17,50,50,469.7581927241329

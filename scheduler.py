@@ -103,13 +103,24 @@ class TradingScheduler:
                     # Get actual shares and entry price from position
                     position = self.trader.get_position(symbol)
                     if position:
-                        self.strategy.position_tracker.add_position(
-                            symbol,
-                            position['shares'],
-                            position['avg_entry_price']
-                        )
-                        logger.info(f"✅ Successfully executed buy order for {symbol}")
-                        logger.info(f"   Shares: {position['shares']:.2f}, Entry: ${position['avg_entry_price']:.2f}")
+                        # Calculate new shares added (Alpaca combines positions, so we need to track incrementally)
+                        existing_positions = self.strategy.position_tracker.get_all_positions_for_symbol(symbol)
+                        existing_total_shares = sum(p['shares'] for p in existing_positions)
+                        new_shares = position['shares'] - existing_total_shares
+                        
+                        if new_shares > 0:
+                            # Add new logical position with current entry price
+                            # Note: Alpaca averages entry prices, but we track each buy separately
+                            self.strategy.position_tracker.add_position(
+                                symbol,
+                                new_shares,
+                                position['avg_entry_price']  # Use Alpaca's averaged price for new shares
+                            )
+                            logger.info(f"✅ Successfully executed buy order for {symbol}")
+                            logger.info(f"   New Shares: {new_shares:.2f}, Entry: ${position['avg_entry_price']:.2f}")
+                            logger.info(f"   Total Shares: {position['shares']:.2f} ({len(existing_positions) + 1} positions)")
+                        else:
+                            logger.info(f"✅ Buy order executed for {symbol} (shares already tracked)")
                     else:
                         logger.warning(f"⚠️  Buy order executed but position not found")
                 else:
@@ -123,21 +134,31 @@ class TradingScheduler:
                 logger.info(f"🔴 SELL SIGNAL detected for {symbol}")
                 logger.info(f"   Reason: {signal.get('reason', 'Anomaly detected')}")
                 
-                # Get position info
-                position = self.strategy.position_tracker.get_position(symbol)
-                if position:
-                    logger.info(f"   Entry Price: ${position['entry_price']:.2f}")
-                    logger.info(f"   Current Price: ${signal.get('current_price', 0):.2f}")
+                # Get all positions for this symbol
+                all_positions = self.strategy.position_tracker.get_all_positions_for_symbol(symbol)
+                if all_positions:
+                    current_price = signal.get('current_price', 0)
+                    total_shares = sum(p['shares'] for p in all_positions)
+                    
+                    logger.info(f"   Positions: {len(all_positions)}")
+                    for i, pos in enumerate(all_positions, 1):
+                        logger.info(f"   Position {i}: {pos['shares']:.2f} shares @ ${pos['entry_price']:.2f}")
+                    logger.info(f"   Current Price: ${current_price:.2f}")
                     
                     success = self.trader.sell_stock(symbol)
                     
                     if success:
-                        # Calculate profit
-                        profit = (signal.get('current_price', 0) - position['entry_price']) * position['shares']
-                        self.strategy.update_performance(symbol, profit)
+                        # Calculate profit for all positions (Alpaca sells everything)
+                        total_profit = 0
+                        for pos in all_positions:
+                            profit = (current_price - pos['entry_price']) * pos['shares']
+                            total_profit += profit
+                            self.strategy.update_performance(symbol, profit)
+                        
+                        # Remove all positions (Alpaca sells everything)
                         self.strategy.position_tracker.remove_position(symbol)
                         logger.info(f"✅ Successfully executed sell order for {symbol}")
-                        logger.info(f"   Profit/Loss: ${profit:.2f}")
+                        logger.info(f"   Total Profit/Loss: ${total_profit:.2f} ({len(all_positions)} positions closed)")
                     else:
                         logger.error(f"❌ Failed to execute sell order for {symbol}")
                 else:
@@ -152,14 +173,15 @@ class TradingScheduler:
     
     def _monitor_positions(self):
         """Monitor existing positions for stop-loss and trailing stop triggers."""
-        positions = self.strategy.position_tracker.get_all_positions()
+        all_positions_dict = self.strategy.position_tracker.get_all_positions()
         
-        if not positions:
+        if not all_positions_dict:
             return
         
-        logger.info(f"\n🔍 Monitoring {len(positions)} positions for stop-loss/trailing stop...")
+        total_positions = sum(len(positions) for positions in all_positions_dict.values())
+        logger.info(f"\n🔍 Monitoring {total_positions} positions across {len(all_positions_dict)} symbols for stop-loss/trailing stop...")
         
-        for symbol, position in positions.items():
+        for symbol, positions_list in all_positions_dict.items():
             # Get current price
             try:
                 import yfinance as yf
@@ -169,20 +191,32 @@ class TradingScheduler:
                     current_price = float(current_data['Close'].iloc[-1])
                     
                     # Check stop-loss and trailing stop
-                    should_sell, reason = self.strategy.position_tracker.update_position(symbol, current_price)
+                    should_sell, reason, position_to_sell = self.strategy.position_tracker.update_position(symbol, current_price)
                     
                     if should_sell:
+                        # Get all positions for this symbol
+                        all_positions = self.strategy.position_tracker.get_all_positions_for_symbol(symbol)
+                        total_shares = sum(p['shares'] for p in all_positions)
+                        
                         logger.warning(f"⚠️  {reason} triggered for {symbol} at ${current_price:.2f}")
-                        logger.info(f"   Entry: ${position['entry_price']:.2f}, Highest: ${position['highest_price']:.2f}")
+                        if position_to_sell:
+                            logger.info(f"   Triggering Position: Entry ${position_to_sell['entry_price']:.2f}, Highest: ${position_to_sell['highest_price']:.2f}")
+                        logger.info(f"   Total Positions: {len(all_positions)}, Total Shares: {total_shares:.2f}")
                         
                         success = self.trader.sell_stock(symbol)
                         
                         if success:
-                            profit = (current_price - position['entry_price']) * position['shares']
-                            self.strategy.update_performance(symbol, profit)
+                            # Calculate profit for all positions (Alpaca sells everything)
+                            total_profit = 0
+                            for pos in all_positions:
+                                profit = (current_price - pos['entry_price']) * pos['shares']
+                                total_profit += profit
+                                self.strategy.update_performance(symbol, profit)
+                            
+                            # Remove all positions (Alpaca sells everything)
                             self.strategy.position_tracker.remove_position(symbol)
                             logger.info(f"✅ Position closed for {symbol}")
-                            logger.info(f"   Profit/Loss: ${profit:.2f}")
+                            logger.info(f"   Total Profit/Loss: ${total_profit:.2f} ({len(all_positions)} positions closed)")
                         else:
                             logger.error(f"❌ Failed to close position for {symbol}")
             except Exception as e:

@@ -97,6 +97,113 @@ class ImprovedAnomalyTradingStrategy:
             logger.warning(f"Error fetching {symbol}: {e}")
             return pd.DataFrame()
     
+    def get_execution_price(self, symbol: str, date, daily_data: pd.Series) -> float:
+        """
+        Get realistic execution price during market hours (near close).
+        Tries to fetch intraday data for 3:45 PM, otherwise simulates realistic price.
+        
+        Args:
+            symbol: Stock symbol
+            date: Trading date (datetime or pandas Timestamp)
+            daily_data: Daily OHLCV data for the day
+            
+        Returns:
+            Execution price (near close, during market hours)
+        """
+        # Convert date to datetime if it's a pandas Timestamp
+        try:
+            if hasattr(date, 'to_pydatetime'):
+                date = date.to_pydatetime()
+            elif isinstance(date, pd.Timestamp):
+                date = date.to_pydatetime()
+            elif not isinstance(date, datetime):
+                date = pd.to_datetime(date).to_pydatetime()
+        except Exception:
+            # If conversion fails, use close price as fallback
+            return float(daily_data['Close'])
+        
+        # Check if date is within last 60 days (Yahoo Finance limitation)
+        # Normalize date to timezone-naive for comparison
+        try:
+            if isinstance(date, pd.Timestamp):
+                date_for_comparison = date.tz_localize(None) if date.tz is not None else date
+            elif hasattr(date, 'tzinfo') and date.tzinfo is not None:
+                date_for_comparison = date.replace(tzinfo=None)
+            else:
+                date_for_comparison = date
+            
+            # Ensure it's a datetime object
+            if not isinstance(date_for_comparison, datetime):
+                date_for_comparison = pd.to_datetime(date_for_comparison).to_pydatetime()
+            
+            days_ago = (datetime.now() - date_for_comparison).days
+        except Exception:
+            # If comparison fails, assume it's historical (>60 days) and skip intraday fetch
+            days_ago = 61
+        if days_ago > 60:
+            # For historical dates beyond 60 days, skip intraday fetch and use fallback
+            pass
+        else:
+            try:
+                # Try to fetch intraday data for the last hour (3:00 PM - 4:00 PM)
+                ticker = yf.Ticker(symbol)
+                # Fetch 1-day of intraday data for the specific date
+                intraday_data = ticker.history(
+                    start=date.strftime('%Y-%m-%d'),
+                    end=(date + timedelta(days=1)).strftime('%Y-%m-%d'),
+                    interval='5m'  # 5-minute bars
+                )
+                
+                if not intraday_data.empty:
+                    intraday_data = intraday_data.reset_index()
+                    # Filter for market hours (9:30 AM - 4:00 PM ET)
+                    if 'Datetime' in intraday_data.columns:
+                        intraday_data['Time'] = pd.to_datetime(intraday_data['Datetime']).dt.time
+                    else:
+                        intraday_data['Time'] = pd.to_datetime(intraday_data.index).time
+                    
+                    # Get price at 3:45 PM (15:45) or closest available
+                    target_time = pd.Timestamp('15:45').time()
+                    
+                    # Find closest time to 3:45 PM
+                    intraday_data['time_diff'] = intraday_data['Time'].apply(
+                        lambda x: abs((pd.Timestamp.combine(date.date(), x) - 
+                                      pd.Timestamp.combine(date.date(), target_time)).total_seconds())
+                    )
+                    closest_idx = intraday_data['time_diff'].idxmin()
+                    
+                    if closest_idx is not None and not pd.isna(closest_idx):
+                        execution_price = float(intraday_data.iloc[closest_idx]['Close'])
+                        # Ensure price is within daily range
+                        if daily_data['Low'] <= execution_price <= daily_data['High']:
+                            return execution_price
+            except Exception as e:
+                # If intraday fetch fails, fall back to simulation
+                # This is expected for historical dates beyond 60 days
+                pass
+        
+        # Fallback: Simulate realistic execution price near close
+        # Use a price between High and Close, weighted toward Close
+        # This simulates execution at ~3:45 PM when price is typically near close
+        close_price = daily_data['Close']
+        high_price = daily_data['High']
+        low_price = daily_data['Low']
+        
+        # If close is near high, use close with slight slippage
+        # If close is near low, use close (already low)
+        # Otherwise, use weighted average: 90% close + 10% high (simulates near-close execution)
+        if close_price >= (high_price + low_price) / 2:
+            # Close is in upper half of range - use close with slight slippage
+            execution_price = close_price * 0.998  # 0.2% slippage
+        else:
+            # Close is in lower half - use close (already favorable)
+            execution_price = close_price
+        
+        # Ensure execution price is within daily range
+        execution_price = max(daily_data['Low'], min(daily_data['High'], execution_price))
+        
+        return execution_price
+    
     def get_position_size(self, symbol: str) -> float:
         """Get dynamic position size based on stock performance."""
         if symbol not in self.stock_performance:
@@ -163,33 +270,107 @@ class ImprovedAnomalyTradingStrategy:
         trailing_stop_triggers = 0
         overbought_sells = 0
         
+        # Check if we need to filter by date range (for monthly backtests)
+        filter_by_date = hasattr(self, 'backtest_start_date') and hasattr(self, 'backtest_end_date')
+        if filter_by_date:
+            backtest_start = pd.to_datetime(self.backtest_start_date).tz_localize(None) if pd.to_datetime(self.backtest_start_date).tz else pd.to_datetime(self.backtest_start_date)
+            backtest_end = pd.to_datetime(self.backtest_end_date).tz_localize(None) if pd.to_datetime(self.backtest_end_date).tz else pd.to_datetime(self.backtest_end_date)
+            # Ensure both are timezone-naive
+            if backtest_start.tz is not None:
+                backtest_start = backtest_start.tz_localize(None)
+            if backtest_end.tz is not None:
+                backtest_end = backtest_end.tz_localize(None)
+        
         # Start after lookback period
         for i in range(self.detector.lookback_period, len(data)):
             current_date = data.iloc[i]['Date']
-            current_price = data.iloc[i]['Close']
+            daily_data = data.iloc[i]
+            current_price = data.iloc[i]['Close']  # For anomaly detection (uses close)
+            
+            # Skip if outside backtest date range (for monthly backtests)
+            if filter_by_date:
+                current_date_pd = pd.to_datetime(current_date)
+                # Normalize timezone for comparison
+                if current_date_pd.tz is not None:
+                    current_date_pd = current_date_pd.tz_localize(None)
+                if current_date_pd < backtest_start or current_date_pd > backtest_end:
+                    # Still need to check stop-losses/trailing stops for positions opened before this period
+                    # but only if we're still within the backtest end date
+                    if current_date_pd <= backtest_end:
+                        execution_price = self.get_execution_price(symbol, current_date, daily_data)
+                        # Check stop-losses and trailing stops for existing positions
+                        positions_to_remove = []
+                        for pos in positions:
+                            pos.update_trailing_stop(execution_price)
+                            if pos.should_stop_loss(execution_price) or pos.should_trailing_stop(execution_price):
+                                if pos.should_stop_loss(execution_price):
+                                    proceeds = pos.shares * execution_price
+                                    profit = proceeds - (pos.shares * pos.entry_price)
+                                    trades.append({
+                                        'date': current_date.strftime('%Y-%m-%d'),
+                                        'type': 'SELL',
+                                        'reason': 'STOP_LOSS',
+                                        'price': round(execution_price, 2),
+                                        'execution_time': '3:45 PM (market hours)',
+                                        'shares': round(pos.shares, 4),
+                                        'proceeds': round(proceeds, 2),
+                                        'entry_price': round(pos.entry_price, 2),
+                                        'profit': round(profit, 2),
+                                        'profit_pct': round(pos.get_unrealized_pnl_pct(execution_price), 2)
+                                    })
+                                    total_sold_value += proceeds
+                                    positions_to_remove.append(pos)
+                                    stop_loss_triggers += 1
+                                    self.update_performance(symbol, profit)
+                                elif pos.should_trailing_stop(execution_price):
+                                    proceeds = pos.shares * execution_price
+                                    profit = proceeds - (pos.shares * pos.entry_price)
+                                    trades.append({
+                                        'date': current_date.strftime('%Y-%m-%d'),
+                                        'type': 'SELL',
+                                        'reason': 'TRAILING_STOP',
+                                        'price': round(execution_price, 2),
+                                        'execution_time': '3:45 PM (market hours)',
+                                        'shares': round(pos.shares, 4),
+                                        'proceeds': round(proceeds, 2),
+                                        'entry_price': round(pos.entry_price, 2),
+                                        'profit': round(profit, 2),
+                                        'profit_pct': round(pos.get_unrealized_pnl_pct(execution_price), 2)
+                                    })
+                                    total_sold_value += proceeds
+                                    positions_to_remove.append(pos)
+                                    trailing_stop_triggers += 1
+                                    self.update_performance(symbol, profit)
+                        for pos in positions_to_remove:
+                            positions.remove(pos)
+                    continue
+            
+            # Get realistic execution price during market hours (near close)
+            execution_price = self.get_execution_price(symbol, current_date, daily_data)
             
             # Check stop-losses and trailing stops for existing positions
             positions_to_remove = []
             for pos in positions:
-                # Update trailing stop
-                pos.update_trailing_stop(current_price)
+                # Update trailing stop using execution price (realistic intraday price)
+                pos.update_trailing_stop(execution_price)
                 
                 # Check stop-loss first (more urgent)
-                if pos.should_stop_loss(current_price):
-                    # Stop-loss triggered
-                    proceeds = pos.shares * current_price
+                if pos.should_stop_loss(execution_price):
+                    # Stop-loss triggered - execute at market hours price
+                    proceeds = pos.shares * execution_price
                     profit = proceeds - (pos.shares * pos.entry_price)
                     
                     trades.append({
                         'date': current_date.strftime('%Y-%m-%d'),
                         'type': 'SELL',
                         'reason': 'STOP_LOSS',
-                        'price': round(current_price, 2),
+                        'price': round(execution_price, 2),
+                        'execution_time': '3:45 PM (market hours)',
                         'shares': round(pos.shares, 4),
                         'proceeds': round(proceeds, 2),
                         'entry_price': round(pos.entry_price, 2),
                         'profit': round(profit, 2),
-                        'profit_pct': round(pos.get_unrealized_pnl_pct(current_price), 2)
+                        'profit_pct': round(pos.get_unrealized_pnl_pct(execution_price), 2)
                     })
                     
                     total_sold_value += proceeds
@@ -198,21 +379,22 @@ class ImprovedAnomalyTradingStrategy:
                     self.update_performance(symbol, profit)
                 
                 # Check trailing stop
-                elif pos.should_trailing_stop(current_price):
-                    # Trailing stop triggered
-                    proceeds = pos.shares * current_price
+                elif pos.should_trailing_stop(execution_price):
+                    # Trailing stop triggered - execute at market hours price
+                    proceeds = pos.shares * execution_price
                     profit = proceeds - (pos.shares * pos.entry_price)
                     
                     trades.append({
                         'date': current_date.strftime('%Y-%m-%d'),
                         'type': 'SELL',
                         'reason': 'TRAILING_STOP',
-                        'price': round(current_price, 2),
+                        'price': round(execution_price, 2),
+                        'execution_time': '3:45 PM (market hours)',
                         'shares': round(pos.shares, 4),
                         'proceeds': round(proceeds, 2),
                         'entry_price': round(pos.entry_price, 2),
                         'profit': round(profit, 2),
-                        'profit_pct': round(pos.get_unrealized_pnl_pct(current_price), 2)
+                        'profit_pct': round(pos.get_unrealized_pnl_pct(execution_price), 2)
                     })
                     
                     total_sold_value += proceeds
@@ -238,24 +420,26 @@ class ImprovedAnomalyTradingStrategy:
                     if signal_type in ['BUY', 'MIXED']:
                         # Get dynamic position size
                         position_size = self.get_position_size(symbol)
-                        shares_to_buy = position_size / current_price
-                        cost = shares_to_buy * current_price
+                        # Use execution price (market hours price) for buy orders
+                        shares_to_buy = position_size / execution_price
+                        cost = shares_to_buy * execution_price
                         
                         # Create new position
                         new_position = Position(
                             shares=shares_to_buy,
-                            entry_price=current_price,
+                            entry_price=execution_price,  # Use execution price, not close
                             entry_date=current_date.strftime('%Y-%m-%d'),
                             position_size=position_size
                         )
-                        new_position.stop_loss_price = current_price * (1 - self.stop_loss_pct)
+                        new_position.stop_loss_price = execution_price * (1 - self.stop_loss_pct)
                         new_position.trailing_stop_pct = self.trailing_stop_pct
-                        new_position.trailing_stop_price = current_price * (1 - self.trailing_stop_pct)
+                        new_position.trailing_stop_price = execution_price * (1 - self.trailing_stop_pct)
                         
                         trades.append({
                             'date': current_date.strftime('%Y-%m-%d'),
                             'type': 'BUY',
-                            'price': round(current_price, 2),
+                            'price': round(execution_price, 2),
+                            'execution_time': '3:45 PM (market hours)',
                             'shares': round(shares_to_buy, 4),
                             'cost': round(cost, 2),
                             'position_size': round(position_size, 2),
@@ -279,19 +463,20 @@ class ImprovedAnomalyTradingStrategy:
                                 pos_to_sell = min(positions, key=lambda p: p.shares)
                                 shares_to_sell = pos_to_sell.shares * 0.25  # Sell 25%
                                 if shares_to_sell > 0:
-                                    proceeds = shares_to_sell * current_price
+                                    proceeds = shares_to_sell * execution_price
                                     profit = proceeds - (shares_to_sell * pos_to_sell.entry_price)
                                     
                                     trades.append({
                                         'date': current_date.strftime('%Y-%m-%d'),
                                         'type': 'SELL',
                                         'reason': 'OVERBOUGHT',
-                                        'price': round(current_price, 2),
+                                        'price': round(execution_price, 2),
+                                        'execution_time': '3:45 PM (market hours)',
                                         'shares': round(shares_to_sell, 4),
                                         'proceeds': round(proceeds, 2),
                                         'entry_price': round(pos_to_sell.entry_price, 2),
                                         'profit': round(profit, 2),
-                                        'profit_pct': round(pos_to_sell.get_unrealized_pnl_pct(current_price), 2)
+                                        'profit_pct': round(pos_to_sell.get_unrealized_pnl_pct(execution_price), 2)
                                     })
                                     
                                     pos_to_sell.shares -= shares_to_sell
@@ -303,17 +488,45 @@ class ImprovedAnomalyTradingStrategy:
                                     if pos_to_sell.shares < 0.0001:
                                         positions.remove(pos_to_sell)
         
-        # Close remaining positions at final price
-        final_price = data.iloc[-1]['Close'] if len(data) > 0 else 0
-        for pos in positions:
-            proceeds = pos.shares * final_price
-            profit = proceeds - (pos.shares * pos.entry_price)
-            total_sold_value += proceeds
-            self.update_performance(symbol, profit)
+        # Close remaining positions at final execution price (market hours price)
+        # Only close positions if we're at the end of the backtest period
+        if filter_by_date:
+            # Close positions at the end of the backtest period
+            final_date = backtest_end
+            # Find the data row closest to backtest_end
+            final_idx = None
+            for i in range(len(data)):
+                date_check = pd.to_datetime(data.iloc[i]['Date'])
+                if date_check.tz is not None:
+                    date_check = date_check.tz_localize(None)
+                if date_check <= backtest_end:
+                    final_idx = i
+                else:
+                    break
+            if final_idx is not None:
+                final_daily_data = data.iloc[final_idx]
+                final_execution_price = self.get_execution_price(symbol, pd.to_datetime(final_daily_data['Date']), final_daily_data)
+            else:
+                final_execution_price = 0
+        elif len(data) > 0:
+            final_date = data.iloc[-1]['Date']
+            final_daily_data = data.iloc[-1]
+            final_execution_price = self.get_execution_price(symbol, final_date, final_daily_data)
+        else:
+            final_execution_price = 0
+        
+        # Only close positions if we're filtering by date (end of backtest period)
+        # or if it's the end of all data
+        if filter_by_date or len(data) > 0:
+            for pos in positions:
+                proceeds = pos.shares * final_execution_price
+                profit = proceeds - (pos.shares * pos.entry_price)
+                total_sold_value += proceeds
+                self.update_performance(symbol, profit)
         
         # Calculate final value
         if len(data) > 0 and total_invested > 0:
-            current_value = sum(pos.shares * final_price for pos in positions)
+            current_value = sum(pos.shares * final_execution_price for pos in positions)
             total_value = current_value + total_sold_value
             profit_loss = total_value - total_invested
             return_pct = (profit_loss / total_invested * 100)
@@ -326,7 +539,7 @@ class ImprovedAnomalyTradingStrategy:
                 'total_invested': round(total_invested, 2),
                 'total_sold_value': round(total_sold_value, 2),
                 'shares_owned': round(sum(pos.shares for pos in positions), 4),
-                'final_price': round(final_price, 2),
+                'final_price': round(final_execution_price, 2),
                 'current_value': round(current_value, 2),
                 'total_value': round(total_value, 2),
                 'profit_loss': round(profit_loss, 2),

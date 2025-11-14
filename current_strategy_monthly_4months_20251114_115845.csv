@@ -1,0 +1,5 @@
+month,month_num,start_date,end_date,days,return_pct,win_rate_pct,total_trades,buy_trades,sell_trades,total_invested,total_value,total_profit_loss,profitable_stocks,total_stocks,stop_loss_triggers,trailing_stop_triggers,overbought_sells
+October 2024,1,2024-10-01,2024-10-31,30,61.08,66.66666666666666,85,57,28,53200.0,85693.93,32493.93,20,30,12,7,9
+September 2024,2,2024-09-01,2024-09-30,29,89.97,70.0,66,49,17,46200.0,87767.71,41567.71,21,30,4,2,11
+August 2024,3,2024-08-01,2024-08-31,30,72.62,76.66666666666667,103,61,42,56600.0,97705.05,41105.05,23,30,8,13,21
+July 2024,4,2024-07-01,2024-07-31,30,63.19,70.0,101,65,36,55400.0,90405.89,35005.89,21,30,10,13,13

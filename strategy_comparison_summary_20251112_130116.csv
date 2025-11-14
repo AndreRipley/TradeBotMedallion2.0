@@ -1,0 +1,3 @@
+Strategy,Return_Pct,Win_Rate_Pct,Total_Trades,Buy_Trades,Sell_Trades,Total_Invested,Total_Value,Profit_Loss,Profitable_Stocks,Total_Stocks
+Current Anomaly Strategy,2.72,76.67,193,105,88,105000.0,107852.44,2852.44,23,30
+Mean-Reversion Strategy,0.66,36.67,36,18,18,64862.04,65287.72,425.68,11,30

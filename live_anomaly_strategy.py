@@ -145,67 +145,94 @@ class LiveAnomalyDetector:
 
 
 class LivePositionTracker:
-    """Tracks positions with stop-loss and trailing stop."""
+    """Tracks positions with stop-loss and trailing stop. Supports multiple positions per symbol."""
     
     def __init__(self, stop_loss_pct: float = 0.05, trailing_stop_pct: float = 0.05):
-        self.positions = {}  # symbol -> Position info
+        self.positions = {}  # symbol -> List of Position info (allows multiple positions per symbol)
         self.stop_loss_pct = stop_loss_pct
         self.trailing_stop_pct = trailing_stop_pct
     
     def add_position(self, symbol: str, shares: float, entry_price: float):
-        """Add a new position."""
-        self.positions[symbol] = {
+        """Add a new position (can have multiple positions per symbol)."""
+        if symbol not in self.positions:
+            self.positions[symbol] = []
+        
+        self.positions[symbol].append({
             'shares': shares,
             'entry_price': entry_price,
             'entry_date': datetime.now(),
             'highest_price': entry_price,
             'stop_loss_price': entry_price * (1 - self.stop_loss_pct),
             'trailing_stop_price': entry_price * (1 - self.trailing_stop_pct)
-        }
+        })
     
-    def update_position(self, symbol: str, current_price: float) -> Tuple[bool, Optional[str]]:
+    def update_position(self, symbol: str, current_price: float) -> Tuple[bool, Optional[str], Optional[Dict]]:
         """
-        Update position and check if stop-loss or trailing stop should trigger.
+        Update all positions for a symbol and check if stop-loss or trailing stop should trigger.
         
         Returns:
-            (should_sell, reason) - True if should sell, reason for sell
+            (should_sell, reason, position_to_sell) - True if should sell, reason, and which position
         """
-        if symbol not in self.positions:
-            return False, None
+        if symbol not in self.positions or len(self.positions[symbol]) == 0:
+            return False, None, None
         
-        pos = self.positions[symbol]
+        # Check each position independently
+        for pos in self.positions[symbol]:
+            # Update highest price for trailing stop
+            if current_price > pos['highest_price']:
+                pos['highest_price'] = current_price
+                pos['trailing_stop_price'] = current_price * (1 - self.trailing_stop_pct)
+            
+            # Check stop-loss first (more urgent)
+            if current_price <= pos['stop_loss_price']:
+                return True, 'STOP_LOSS', pos
+            
+            # Check trailing stop
+            if current_price <= pos['trailing_stop_price']:
+                return True, 'TRAILING_STOP', pos
         
-        # Update highest price for trailing stop
-        if current_price > pos['highest_price']:
-            pos['highest_price'] = current_price
-            pos['trailing_stop_price'] = current_price * (1 - self.trailing_stop_pct)
-        
-        # Check stop-loss
-        if current_price <= pos['stop_loss_price']:
-            return True, 'STOP_LOSS'
-        
-        # Check trailing stop
-        if current_price <= pos['trailing_stop_price']:
-            return True, 'TRAILING_STOP'
-        
-        return False, None
+        return False, None, None
     
-    def remove_position(self, symbol: str):
-        """Remove a position."""
-        if symbol in self.positions:
+    def remove_position(self, symbol: str, position_to_remove: Optional[Dict] = None):
+        """Remove a position. If position_to_remove is None, removes all positions for symbol."""
+        if symbol not in self.positions:
+            return
+        
+        if position_to_remove is None:
+            # Remove all positions
             del self.positions[symbol]
+        else:
+            # Remove specific position
+            if position_to_remove in self.positions[symbol]:
+                self.positions[symbol].remove(position_to_remove)
+            
+            # Clean up empty lists
+            if len(self.positions[symbol]) == 0:
+                del self.positions[symbol]
     
     def get_position(self, symbol: str) -> Optional[Dict]:
-        """Get position info for a symbol."""
-        return self.positions.get(symbol)
+        """Get first position info for a symbol (for backward compatibility)."""
+        if symbol in self.positions and len(self.positions[symbol]) > 0:
+            return self.positions[symbol][0]
+        return None
+    
+    def get_all_positions_for_symbol(self, symbol: str) -> List[Dict]:
+        """Get all positions for a symbol."""
+        return self.positions.get(symbol, []).copy()
     
     def has_position(self, symbol: str) -> bool:
-        """Check if we have a position in a symbol."""
-        return symbol in self.positions
+        """Check if we have any position in a symbol."""
+        return symbol in self.positions and len(self.positions[symbol]) > 0
     
     def get_all_positions(self) -> Dict:
-        """Get all positions."""
-        return self.positions.copy()
+        """Get all positions (symbol -> list of positions)."""
+        return {symbol: positions.copy() for symbol, positions in self.positions.items()}
+    
+    def get_total_shares(self, symbol: str) -> float:
+        """Get total shares across all positions for a symbol."""
+        if symbol not in self.positions:
+            return 0.0
+        return sum(pos['shares'] for pos in self.positions[symbol])
 
 
 class LiveAnomalyStrategy:
@@ -265,13 +292,14 @@ class LiveAnomalyStrategy:
             data = self.detector.fetch_recent_data(symbol, days=1)
             if not data.empty:
                 current_price = data.iloc[-1]['Close']
-                should_sell, reason = self.position_tracker.update_position(symbol, current_price)
+                should_sell, reason, position_to_sell = self.position_tracker.update_position(symbol, current_price)
                 if should_sell:
                     return {
                         'action': 'SELL',
                         'reason': reason,
                         'symbol': symbol,
-                        'current_price': current_price
+                        'current_price': current_price,
+                        'position_to_sell': position_to_sell  # Track which position triggered
                     }
         
         # Check for new anomalies
@@ -285,9 +313,9 @@ class LiveAnomalyStrategy:
         
         signal_type = anomaly_info.get('signal_type')
         
-        # Don't buy if we already have a position
-        if signal_type == 'BUY' and self.position_tracker.has_position(symbol):
-            return {'action': 'HOLD', 'reason': 'Already have position'}
+        # Allow multiple positions per symbol (like backtest)
+        # Note: Alpaca will combine them into one physical position, but we track them separately
+        # for independent stop-loss/trailing stop management
         
         # Handle sell signals (overbought) - only if we have position and strong signal
         if signal_type in ['SELL', 'MIXED'] and self.position_tracker.has_position(symbol):
