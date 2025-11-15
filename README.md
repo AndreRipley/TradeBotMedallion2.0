@@ -18,10 +18,11 @@ The bot uses an **Improved Anomaly Buy+Sell Strategy** that:
 - ✅ **Continuous monitoring** - checks all stocks every minute during market hours
 - ✅ **Risk management** - 5% stop-loss and 5% trailing stop on all positions
 - ✅ **Dynamic position sizing** - increases size for winners, decreases for losers
+- ✅ **Multiple positions per stock** - can accumulate positions with independent risk management
 - ✅ **Position monitoring** - checks open positions every minute for stop-loss triggers
 - ✅ **30 diversified stocks** by default (across 7 sectors)
 - ✅ **Paper trading support** via Alpaca API
-- ✅ **Cloud deployment ready** - runs 24/7 on Google Cloud Run
+- ✅ **Cloud deployed** - runs 24/7 on Google Cloud Run with health check endpoint
 - ✅ **Comprehensive logging** and error handling
 
 ## Strategy Details
@@ -45,9 +46,10 @@ The bot detects anomalies using multiple indicators:
 ### Trading Logic
 
 1. **Severity Threshold**: Only trades anomalies with severity ≥ 1.0
-2. **Position Limits**: Won't buy if already holding that stock
+2. **Multiple Positions**: Can buy same stock multiple times (each tracked independently)
 3. **Account Balance**: Checks buying power before each trade
 4. **Risk Management**: Stop-losses and trailing stops protect capital
+5. **Independent Stops**: Each position has its own stop-loss and trailing stop
 
 ### Risk Management
 
@@ -107,13 +109,27 @@ python3 main.py
 
 ### Cloud Deployment (Recommended for 24/7 Operation)
 
-Deploy to Google Cloud Run for continuous operation:
+**Currently Deployed**: The bot is configured and ready for Google Cloud Run deployment.
+
+**Deploy to Google Cloud Run:**
 
 ```bash
 bash deploy_fix_permissions.sh
 ```
 
-See `GCP_DEPLOYMENT.md` and `CLOUD_RUN_ENV_VARS.md` for detailed instructions.
+**What Gets Deployed:**
+- Docker containerized application
+- HTTP health check endpoint (`/health` and `/` on port 8080)
+- Runs continuously with `min-instances=1` (24/7 operation)
+- Environment variables configured via Cloud Run console
+- Automatic logging to Cloud Run logs
+
+**After Deployment:**
+1. Set environment variables in Cloud Run console (see `CLOUD_RUN_ENV_VARS.md`)
+2. Bot starts automatically and runs continuously
+3. Monitor via Cloud Run logs or use `view_logs.sh` script
+
+See `QUICK_DEPLOY.md`, `GCP_DEPLOYMENT.md` and `CLOUD_RUN_ENV_VARS.md` for detailed instructions.
 
 ## How It Works
 
@@ -135,20 +151,24 @@ See `GCP_DEPLOYMENT.md` and `CLOUD_RUN_ENV_VARS.md` for detailed instructions.
 2. **Buy Signal Execution:**
    - Checks account balance and buying power
    - Calculates dynamic position size based on stock performance
-   - Executes buy order via Alpaca API
-   - Sets stop-loss and trailing stop prices
-   - Tracks position for monitoring
+   - Executes buy order via Alpaca API (uses ask_price)
+   - Creates new logical position with independent stop-loss and trailing stop
+   - Tracks position separately (supports multiple positions per stock)
+   - Alpaca combines positions physically, but bot tracks them independently
 
-3. **Sell Signal Execution:**
-   - Detects overbought conditions (severity ≥ 3.0)
-   - Executes sell order
-   - Calculates profit/loss
-   - Updates performance tracking
+3. **Sell Signal Execution (3 types):**
+   - **Stop-Loss**: Price drops 5% below entry → SELL entire position
+   - **Trailing Stop**: Price drops 5% below highest → SELL entire position
+   - **Overbought**: Severity ≥ 3.0 with position → SELL entire position
+   - Executes sell order via Alpaca API (uses bid_price)
+   - Calculates profit/loss for each logical position
+   - Updates performance tracking (wins/losses per stock)
 
 4. **Position Monitoring:**
-   - Checks current price every minute
-   - Updates trailing stop if price increases
-   - Executes sell if stop-loss or trailing stop triggered
+   - Checks current price every minute (using 1-minute bars from Yahoo Finance)
+   - Updates trailing stop independently for each position if price increases
+   - Executes sell if any position's stop-loss or trailing stop triggered
+   - Sells entire Alpaca position (all logical positions) when any trigger fires
    - Protects capital from rapid declines
 
 ## Default Stock List
@@ -249,7 +269,7 @@ The strategy prioritizes **quality over quantity** - waiting for significant ano
 This is **normal** - the strategy is selective:
 - Only trades anomalies with severity ≥ 1.0
 - Requires specific conditions (oversold/overbought)
-- Won't buy if already holding a stock
+- Can buy same stock multiple times (multiple positions supported)
 - See `TROUBLESHOOTING_LOW_TRADES.md` for details
 
 ### Insufficient Buying Power
@@ -265,6 +285,30 @@ This is **normal** - the strategy is selective:
 - **API errors**: Verify credentials and rate limits
 - **Price data issues**: Check internet connection
 
+## Cloud Deployment Status
+
+✅ **Ready for Deployment**: The bot is fully configured for Google Cloud Run
+
+**Deployment Features:**
+- ✅ Docker containerized (`Dockerfile` included)
+- ✅ HTTP health check endpoint (`/health` and `/` on port 8080)
+- ✅ Cloud Run compatible (handles PORT environment variable)
+- ✅ Continuous operation (`min-instances=1` keeps it running 24/7)
+- ✅ Environment variable configuration via Cloud Run console
+- ✅ Comprehensive logging to Cloud Run logs
+
+**Deployment Scripts:**
+- `deploy_fix_permissions.sh` - Full deployment with permission fixes (recommended)
+- `deploy_gcp.sh` - Standard deployment script
+- `deploy_automated.sh` - Automated deployment with project creation
+
+**Quick Deploy:**
+```bash
+bash deploy_fix_permissions.sh
+```
+
+Then set environment variables in Cloud Run console (see `CLOUD_RUN_ENV_VARS.md`).
+
 ## Important Notes
 
 ⚠️ **DISCLAIMER**: This bot is for educational purposes. Always test with paper trading first. Trading involves risk of financial loss. Use at your own risk.
@@ -273,15 +317,30 @@ This is **normal** - the strategy is selective:
 - **Market Hours**: Only trades 9:30 AM - 4:00 PM ET on weekdays
 - **Selective Trading**: Low trade frequency is intentional - strategy waits for good opportunities
 - **Risk Management**: Stop-losses and trailing stops protect capital
+- **Multiple Positions**: Can hold multiple positions per stock with independent risk management
+- **Health Check**: HTTP endpoint on port 8080 for Cloud Run health checks
 
 ## Documentation
 
+**Deployment:**
+- `QUICK_DEPLOY.md` - Quick deployment guide ⭐
 - `CLOUD_RUN_ENV_VARS.md` - Environment variables guide
-- `GCP_DEPLOYMENT.md` - Google Cloud deployment instructions
+- `GCP_DEPLOYMENT.md` - Detailed Google Cloud deployment instructions
+- `deploy_fix_permissions.sh` - Deployment script (recommended)
+
+**Understanding the Bot:**
+- `CURRENT_BOT_DETAILED_EXPLANATION.md` - Complete explanation of current bot behavior
+- `LIVE_VS_BACKTEST_COMPARISON.md` - Differences between live bot and backtest
+- `MULTIPLE_POSITIONS_EXPLANATION.md` - How multiple positions work
+
+**Troubleshooting:**
 - `TROUBLESHOOTING_LOW_TRADES.md` - Why trade frequency is low
 - `FIX_BUYING_POWER.md` - Resolving insufficient buying power
 - `POSITION_CHECK_ANALYSIS.md` - Position monitoring frequency analysis
+
+**Configuration:**
 - `STOCK_LISTS.md` - Stock list options (20, 30, 50 stocks)
+- `STRATEGY_COMPARISON_GUIDE.md` - How to add new strategies
 
 ## License
 
