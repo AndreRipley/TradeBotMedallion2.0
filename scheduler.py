@@ -4,7 +4,7 @@ Scheduler module to execute trades using Improved Anomaly Buy+Sell Strategy.
 import schedule
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from typing import Dict, Optional
 from config import Config
@@ -45,6 +45,28 @@ class TradingScheduler:
         
         return is_weekday and market_open <= now <= market_close
     
+    def _get_next_market_open(self) -> datetime:
+        """Calculate the next market open time."""
+        now = datetime.now(self.timezone)
+        today_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        
+        # If market already opened today, check tomorrow
+        if now >= today_open.replace(hour=16, minute=0) or now.weekday() >= 5:
+            # Market closed for today or it's weekend
+            days_ahead = 1
+            # Skip weekends
+            while (now + timedelta(days=days_ahead)).weekday() >= 5:
+                days_ahead += 1
+            next_open = (now + timedelta(days=days_ahead)).replace(hour=9, minute=30, second=0, microsecond=0)
+        elif now < today_open:
+            # Market hasn't opened yet today
+            next_open = today_open
+        else:
+            # Market is currently open, return current time (shouldn't happen in this context)
+            next_open = now
+        
+        return next_open
+    
     def run(self):
         """Start the scheduler and run continuously."""
         logger.info(f"Starting trading bot scheduler")
@@ -54,7 +76,7 @@ class TradingScheduler:
         
         logger.info("Scheduler started. Checking for anomalies and monitoring positions every minute during market hours...")
         
-        # Run scheduler - check every minute
+        # Run scheduler - optimized to only check during market hours
         try:
             while True:
                 # Check if it's market hours
@@ -64,9 +86,22 @@ class TradingScheduler:
                     self._execute_trading_logic()
                     # Also check positions separately for positions not in watchlist
                     self._monitor_positions()
-                
-                # Sleep for 1 minute before next check
-                time.sleep(60)
+                    
+                    # Sleep for 1 minute during market hours
+                    time.sleep(60)
+                else:
+                    # Outside market hours - sleep until next market open
+                    next_open = self._get_next_market_open()
+                    now = datetime.now(self.timezone)
+                    sleep_seconds = (next_open - now).total_seconds()
+                    
+                    if sleep_seconds > 0:
+                        logger.info(f"⏸️  Market closed. Next market open: {next_open.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                        logger.info(f"   Sleeping for {sleep_seconds/3600:.1f} hours until market opens...")
+                        time.sleep(min(sleep_seconds, 3600))  # Sleep max 1 hour at a time to check for market hours
+                    else:
+                        # Shouldn't happen, but fallback to 1 minute
+                        time.sleep(60)
         except KeyboardInterrupt:
             logger.info("Scheduler stopped by user")
     
@@ -189,6 +224,19 @@ class TradingScheduler:
                 current_data = ticker.history(period='1d', interval='1m')
                 if not current_data.empty:
                     current_price = float(current_data['Close'].iloc[-1])
+                    
+                    # Log price check to Supabase
+                    try:
+                        from supabase_logger import log_price_check
+                        log_price_check(
+                            symbol=symbol,
+                            price=current_price,
+                            context='position_monitor',
+                            additional_data={'volume': float(current_data['Volume'].iloc[-1]) if 'Volume' in current_data.columns else None}
+                        )
+                    except Exception as e:
+                        # Don't fail if Supabase logging fails
+                        pass
                     
                     # Check stop-loss and trailing stop
                     should_sell, reason, position_to_sell = self.strategy.position_tracker.update_position(symbol, current_price)

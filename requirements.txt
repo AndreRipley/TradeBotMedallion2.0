@@ -10,6 +10,9 @@ pytz>=2023.3
 pandas>=2.0.0
 numpy>=1.24.0
 
+# Supabase for price logging
+supabase>=2.0.0
+
 # Trading API (Alpaca) - using newer alpaca-py SDK
 alpaca-py>=0.18.0
 

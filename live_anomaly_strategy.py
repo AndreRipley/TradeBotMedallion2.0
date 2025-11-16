@@ -54,6 +54,19 @@ class LiveAnomalyDetector:
         std_price = historical['Close'].std()
         current_price = current['Close']
         
+        # Log price check to Supabase
+        try:
+            from supabase_logger import log_price_check
+            log_price_check(
+                symbol=symbol,
+                price=current_price,
+                context='signal_check',
+                additional_data={'volume': current.get('Volume')}
+            )
+        except Exception as e:
+            # Don't fail if Supabase logging fails
+            pass
+        
         # Z-score
         z_score = (current_price - mean_price) / std_price if std_price > 0 else 0
         

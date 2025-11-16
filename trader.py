@@ -122,6 +122,20 @@ class Trader:
                 return False
             
             current_price = float(quote[symbol].ask_price)
+            
+            # Log price check to Supabase
+            try:
+                from supabase_logger import log_price_check
+                log_price_check(
+                    symbol=symbol,
+                    price=current_price,
+                    context='buy',
+                    additional_data={'order_type': 'market', 'dollar_amount': dollar_amount}
+                )
+            except Exception as e:
+                # Don't fail if Supabase logging fails
+                pass
+            
             quantity = int(dollar_amount / current_price)
             
             if quantity < 1:
@@ -230,6 +244,20 @@ class Trader:
                 return False
             
             current_price = float(quote[symbol].bid_price)
+            
+            # Log price check to Supabase
+            try:
+                from supabase_logger import log_price_check
+                log_price_check(
+                    symbol=symbol,
+                    price=current_price,
+                    context='sell',
+                    additional_data={'order_type': 'market', 'shares': shares}
+                )
+            except Exception as e:
+                # Don't fail if Supabase logging fails
+                pass
+            
             quantity = int(shares)
             
             # Create market order

@@ -22,3 +22,7 @@ POSITION_SIZE=1000.0
 TIMEZONE=America/New_York
 LOG_LEVEL=INFO
 LOG_FILE=trading_bot.log
+
+# Supabase (for price logging)
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_KEY=your-anon-public-key-here
