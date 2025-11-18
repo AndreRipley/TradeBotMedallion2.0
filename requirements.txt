@@ -1,0 +1,21 @@
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+pydantic>=2.0.0
+sqlalchemy>=2.0.0
+pyyaml>=6.0
+psycopg2-binary>=2.9.0  # PostgreSQL driver for Supabase
+pytz>=2023.3  # Timezone support for market hours
+alpaca-py>=0.30.0  # Alpaca API for trade execution
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Optional: for async HTTP (alternative to requests)
+# httpx>=0.24.0
+
+# Optional: for scheduling (alternative to asyncio)
+# apscheduler>=3.10.0
+

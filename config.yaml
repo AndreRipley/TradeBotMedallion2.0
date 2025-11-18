@@ -1,0 +1,37 @@
+database:
+  # Use Supabase PostgreSQL (set via DATABASE_URL env var)
+  # Format: postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+  # Or set SUPABASE_URL and SUPABASE_DB_PASSWORD env vars
+  url: "sqlite:///./data/trading_alerts.db"  # Fallback to SQLite if env vars not set
+  echo: false
+
+universe:
+  min_market_cap: 5000000000  # $5B
+  three_month_min_return: 80.0  # 80%
+  six_month_min_return: 90.0  # 90%
+  ytd_min_return: 100.0  # 100%
+  lookback_months: 13
+
+rsi:
+  period: 14
+  threshold: 28.0  # Cross-under threshold
+
+alert:
+  take_profit_pct: 3.0  # 3% take profit
+  max_holding_days: 20  # 20 calendar days
+
+scheduler:
+  update_interval_minutes: 5
+  market_hours_only: true
+  market_open_hour: 9
+  market_close_hour: 16
+
+api:
+  alpha_vantage_api_key: null  # Set via ALPHA_VANTAGE_API_KEY env var
+  sec_api_base_url: "https://api.sec.gov"
+  rate_limit_delay_seconds: 0.2
+
+trading:
+  position_size: 1000.0  # Dollar amount per position (set via POSITION_SIZE env var)
+  enabled: true  # Enable automated trading (set via TRADING_ENABLED env var)
+

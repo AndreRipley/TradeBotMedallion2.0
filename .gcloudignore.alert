@@ -35,8 +35,9 @@ docs/
 *.md
 !README.md
 
-# Scripts
+# Scripts (keep only deployment scripts)
 scripts/
+!scripts/shell/deploy*.sh
 
 # Old bot files
 stat_arb/
@@ -44,6 +45,8 @@ stat_arb/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
@@ -56,3 +59,9 @@ Thumbs.db
 # Test files
 tests/
 .pytest_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
