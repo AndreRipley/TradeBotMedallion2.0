@@ -186,6 +186,13 @@ class MockIntradayPriceProvider(IntradayPriceProvider):
         current = start_date
         base_price = 100.0
         
+        # Ensure timezone-aware datetimes for comparison
+        import pytz
+        if current.tzinfo is None:
+            current = pytz.UTC.localize(current)
+        if end_date.tzinfo is None:
+            end_date = pytz.UTC.localize(end_date)
+        
         while current <= end_date:
             # Simple random walk for mock data
             import random
@@ -214,10 +221,16 @@ class MockIntradayPriceProvider(IntradayPriceProvider):
         interval: str = "5min"
     ) -> List[CandleData]:
         """Get latest candles since timestamp."""
-        if since is None:
-            since = datetime.utcnow() - timedelta(days=1)
+        import pytz
         
-        end_date = datetime.utcnow()
+        if since is None:
+            since = datetime.now(pytz.UTC) - timedelta(days=1)
+        else:
+            # Ensure timezone-aware datetime
+            if since.tzinfo is None:
+                since = pytz.UTC.localize(since)
+        
+        end_date = datetime.now(pytz.UTC)
         return self.get_historical_candles(symbol, since, end_date, interval)
 
 
@@ -304,9 +317,15 @@ class AlphaVantageIntradayProvider(IntradayPriceProvider):
         interval: str = "5min"
     ) -> List[CandleData]:
         """Get latest candles since timestamp."""
-        if since is None:
-            since = datetime.utcnow() - timedelta(days=1)
+        import pytz
         
-        end_date = datetime.utcnow()
+        if since is None:
+            since = datetime.now(pytz.UTC) - timedelta(days=1)
+        else:
+            # Ensure timezone-aware datetime
+            if since.tzinfo is None:
+                since = pytz.UTC.localize(since)
+        
+        end_date = datetime.now(pytz.UTC)
         return self.get_historical_candles(symbol, since, end_date, interval)
 

@@ -77,7 +77,15 @@ class RealtimeMonitor:
                 symbol=symbol
             ).order_by(Candle.ts.desc()).first()
             
-            since = last_candle.ts if last_candle else datetime.utcnow() - timedelta(days=1)
+            if last_candle:
+                since = last_candle.ts
+                # Ensure timezone-aware datetime
+                if since.tzinfo is None:
+                    import pytz
+                    since = pytz.UTC.localize(since)
+            else:
+                import pytz
+                since = datetime.now(pytz.UTC) - timedelta(days=1)
             
             # Fetch new candles
             new_candles = self.price_provider.get_latest_candles(
