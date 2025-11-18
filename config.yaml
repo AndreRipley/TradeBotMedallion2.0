@@ -35,3 +35,10 @@ trading:
   position_size: 1000.0  # Dollar amount per position (set via POSITION_SIZE env var)
   enabled: true  # Enable automated trading (set via TRADING_ENABLED env var)
 
+sms:
+  enabled: false  # Enable SMS notifications (set via SMS_ENABLED env var)
+  phone_number: ""  # Recipient phone number in E.164 format: +1234567890 (set via SMS_PHONE_NUMBER env var)
+  twilio_account_sid: null  # Twilio Account SID (set via TWILIO_ACCOUNT_SID env var)
+  twilio_auth_token: null  # Twilio Auth Token (set via TWILIO_AUTH_TOKEN env var)
+  twilio_from_number: null  # Twilio phone number to send from (set via TWILIO_FROM_NUMBER env var)
+

@@ -153,10 +153,9 @@ class AlertService:
     
     def send_alert_notification(self, alert: Alert) -> None:
         """
-        Send alert notification (console, email, webhook, etc.).
-        
-        This is a placeholder for notification handlers.
+        Send alert notification (console, SMS, email, webhook, etc.).
         """
+        # Log to console
         logger.info(
             f"ALERT: {alert.symbol} - RSI crossed below {self.threshold} "
             f"(RSI={alert.rsi_value:.2f}, Price=${alert.price:.2f}) "
@@ -168,9 +167,54 @@ class AlertService:
             f"Max holding: {alert.max_holding_days} days"
         )
         
-        # TODO: Add email/Slack/webhook handlers here
-        # Example:
-        # email_handler.send(alert)
-        # slack_handler.send(alert)
-        # webhook_handler.post(alert)
+        # Send SMS notification if enabled
+        if self.config.sms.enabled:
+            self._send_sms_notification(alert)
+    
+    def _send_sms_notification(self, alert: Alert) -> None:
+        """Send SMS notification via Twilio."""
+        try:
+            from twilio.rest import Client
+            
+            if not self.config.sms.twilio_account_sid or not self.config.sms.twilio_auth_token:
+                logger.warning("Twilio credentials not configured. Skipping SMS notification.")
+                return
+            
+            if not self.config.sms.phone_number:
+                logger.warning("SMS phone number not configured. Skipping SMS notification.")
+                return
+            
+            if not self.config.sms.twilio_from_number:
+                logger.warning("Twilio from number not configured. Skipping SMS notification.")
+                return
+            
+            # Initialize Twilio client
+            client = Client(
+                self.config.sms.twilio_account_sid,
+                self.config.sms.twilio_auth_token
+            )
+            
+            # Format message
+            message = (
+                f"🚨 BUY ALERT: {alert.symbol}\n"
+                f"RSI: {alert.rsi_value:.2f} (below {self.threshold})\n"
+                f"Price: ${alert.price:.2f}\n"
+                f"Entry: Next 5-min candle\n"
+                f"Take Profit: +{alert.take_profit_pct}%\n"
+                f"Max Hold: {alert.max_holding_days} days"
+            )
+            
+            # Send SMS
+            message_obj = client.messages.create(
+                body=message,
+                from_=self.config.sms.twilio_from_number,
+                to=self.config.sms.phone_number
+            )
+            
+            logger.info(f"✅ SMS sent to {self.config.sms.phone_number} (SID: {message_obj.sid})")
+            
+        except ImportError:
+            logger.warning("twilio package not installed. Install with: pip install twilio")
+        except Exception as e:
+            logger.error(f"Error sending SMS notification: {e}", exc_info=True)
 

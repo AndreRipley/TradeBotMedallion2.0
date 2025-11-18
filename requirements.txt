@@ -8,6 +8,7 @@ pyyaml>=6.0
 psycopg2-binary>=2.9.0  # PostgreSQL driver for Supabase
 pytz>=2023.3  # Timezone support for market hours
 alpaca-py>=0.30.0  # Alpaca API for trade execution
+twilio>=8.10.0  # SMS notifications via Twilio
 
 # Testing
 pytest>=7.4.0

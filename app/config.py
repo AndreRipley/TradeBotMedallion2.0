@@ -97,6 +97,16 @@ class ApiConfig:
 
 
 @dataclass
+class SmsConfig:
+    """SMS notification configuration."""
+    enabled: bool = False
+    phone_number: str = ""  # Recipient phone number (E.164 format: +1234567890)
+    twilio_account_sid: Optional[str] = None
+    twilio_auth_token: Optional[str] = None
+    twilio_from_number: Optional[str] = None  # Twilio phone number
+
+
+@dataclass
 class Config:
     """Main configuration class."""
     database: DatabaseConfig
@@ -105,6 +115,7 @@ class Config:
     alert: AlertConfig
     scheduler: SchedulerConfig
     api: ApiConfig
+    sms: SmsConfig
 
     @classmethod
     def from_yaml(cls, config_path: Optional[Path] = None) -> "Config":
@@ -160,6 +171,13 @@ class Config:
                 alpha_vantage_api_key=os.getenv("ALPHA_VANTAGE_API_KEY", config_dict.get("api", {}).get("alpha_vantage_api_key")),
                 sec_api_base_url=os.getenv("SEC_API_BASE_URL", config_dict.get("api", {}).get("sec_api_base_url", "https://api.sec.gov")),
                 rate_limit_delay_seconds=float(os.getenv("RATE_LIMIT_DELAY", config_dict.get("api", {}).get("rate_limit_delay_seconds", 0.2)))
+            ),
+            sms=SmsConfig(
+                enabled=os.getenv("SMS_ENABLED", "false").lower() == "true",
+                phone_number=os.getenv("SMS_PHONE_NUMBER", config_dict.get("sms", {}).get("phone_number", "")),
+                twilio_account_sid=os.getenv("TWILIO_ACCOUNT_SID", config_dict.get("sms", {}).get("twilio_account_sid")),
+                twilio_auth_token=os.getenv("TWILIO_AUTH_TOKEN", config_dict.get("sms", {}).get("twilio_auth_token")),
+                twilio_from_number=os.getenv("TWILIO_FROM_NUMBER", config_dict.get("sms", {}).get("twilio_from_number"))
             )
         )
 
