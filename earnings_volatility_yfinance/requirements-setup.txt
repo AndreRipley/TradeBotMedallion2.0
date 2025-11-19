@@ -1,0 +1,3 @@
+# Additional requirements for setup scripts (not needed in Docker container)
+google-cloud-secret-manager>=2.16.0
+

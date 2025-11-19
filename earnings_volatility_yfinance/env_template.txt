@@ -1,0 +1,27 @@
+# Alpaca API Configuration
+ALPACA_KEY=your_alpaca_api_key_here
+ALPACA_SECRET=your_alpaca_secret_key_here
+ALPACA_BASE_URL=  # Leave empty for paper trading
+ALPACA_PAPER=true
+
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_supabase_anon_key_here
+
+# Trading Strategy Configuration (Optional - defaults shown)
+RISK_PER_TRADE_PCT=5.0
+ENTRY_MINUTES_BEFORE_CLOSE=15
+EXIT_MINUTES_AFTER_OPEN=15
+IV_SLOPE_THRESHOLD=0.05
+MIN_VOLUME=1500000
+MIN_IV_RV_RATIO=1.2
+PREFERRED_OPTION_TYPE=call
+BACK_MONTH_DAYS_OFFSET=30
+MAX_POSITIONS=5
+
+# Rate Limiting
+YFINANCE_DELAY_SECONDS=2.0
+
+# Ticker List (Start small to avoid rate limits!)
+TICKER_LIST=AAPL,TSLA,AMD,NVDA,META
+
